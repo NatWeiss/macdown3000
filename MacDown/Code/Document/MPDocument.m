@@ -266,6 +266,7 @@ typedef NS_ENUM(NSUInteger, MPScrollOwner) {
 - (void)refreshHeaderCacheAfterResize;
 - (void)windowDidEndLiveResize:(NSNotification *)notification;
 - (void)windowDidChangeFullScreen:(NSNotification *)notification;
+- (void)applyDocumentFullHeightPreferenceToWindow:(NSWindow *)window;
 - (void)applyEditorStartInPreviewModePreference;
 // Commit 8 (gap 9): MathJax generation counter accessor (used by tests via category)
 - (NSUInteger)mathJaxRenderGeneration;
@@ -571,6 +572,7 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
         // path depends on current subview widths, and split-view autosave may
         // not have pushed those frames into the content view hierarchy yet.
         [controller.window.contentView layoutSubtreeIfNeeded];
+        [self applyDocumentFullHeightPreferenceToWindow:controller.window];
         [self applyEditorStartInPreviewModePreference];
 
         // Commit 6 (gaps 1+3): Register for window resize/fullscreen notifications.
@@ -2131,6 +2133,32 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
 
     CGFloat targetRatio = self.preferences.editorOnRight ? 1.0 : 0.0;
     [self setSplitViewDividerLocation:targetRatio];
+}
+
+- (void)applyDocumentFullHeightPreferenceToWindow:(NSWindow *)window
+{
+    if (!self.preferences.documentOpensAtFullHeight || !window)
+        return;
+
+    NSScreen *screen = window.screen ?: [NSScreen mainScreen];
+    if (!screen)
+        return;
+
+    NSRect visibleFrame = screen.visibleFrame;
+    CGFloat targetWidth = NSWidth(window.frame);
+    targetWidth = MIN(targetWidth, NSWidth(visibleFrame));
+    targetWidth = MAX(targetWidth, window.minSize.width);
+
+    CGFloat targetHeight = MAX(NSHeight(visibleFrame), window.minSize.height);
+    CGFloat targetX = NSMinX(visibleFrame)
+        + floor((NSWidth(visibleFrame) - targetWidth) / 2.0);
+    NSRect frame = NSMakeRect(
+        targetX,
+        NSMinY(visibleFrame),
+        targetWidth,
+        targetHeight
+    );
+    [window setFrame:frame display:YES];
 }
 
 - (void)setupEditor:(NSString *)changedKey
